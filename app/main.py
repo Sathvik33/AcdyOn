@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
@@ -70,21 +70,27 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIST = ROOT_DIR / "frontend" / "dist"
 INDEX_FILE = FRONTEND_DIST / "index.html"
 
-if (FRONTEND_DIST / "assets").is_dir():
+if FRONTEND_DIST.is_dir():
     app.mount(
         "/assets",
-        StaticFiles(directory=FRONTEND_DIST / "assets"),
+        StaticFiles(directory=FRONTEND_DIST / "assets" if (FRONTEND_DIST / "assets").is_dir() else FRONTEND_DIST),
         name="assets",
     )
 
 
 @app.get("/", include_in_schema=False)
-def index():
-    if not INDEX_FILE.is_file():
-        return JSONResponse(
-            status_code=503,
-            content={
-                "detail": "Frontend bundle not found. Run 'npm install && npm run build' in frontend/."
-            },
-        )
-    return FileResponse(INDEX_FILE)
+@app.get("/{full_path:path}", include_in_schema=False)
+def serve_spa(request: Request, full_path: str = ""):
+    # Do not intercept API or docs routes
+    if full_path.startswith(("api/", "docs", "openapi.json", "health", "jobs", "ingestion", "stats", "sources")):
+        return JSONResponse(status_code=404, content={"detail": "Not found"})
+
+    if INDEX_FILE.is_file():
+        return FileResponse(INDEX_FILE)
+
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": "Frontend bundle not found. Run 'npm install && npm run build' in frontend/."
+        },
+    )
