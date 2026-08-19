@@ -3,6 +3,7 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
@@ -64,6 +65,16 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Enable CORS for cross-origin browser requests
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Register API routes FIRST
 app.include_router(routes.router)
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -71,20 +82,14 @@ FRONTEND_DIST = ROOT_DIR / "frontend" / "dist"
 INDEX_FILE = FRONTEND_DIST / "index.html"
 
 if FRONTEND_DIST.is_dir():
-    app.mount(
-        "/assets",
-        StaticFiles(directory=FRONTEND_DIST / "assets" if (FRONTEND_DIST / "assets").is_dir() else FRONTEND_DIST),
-        name="assets",
-    )
+    assets_dir = FRONTEND_DIST / "assets"
+    if assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
 
 @app.get("/", include_in_schema=False)
 @app.get("/{full_path:path}", include_in_schema=False)
 def serve_spa(request: Request, full_path: str = ""):
-    # Do not intercept API or docs routes
-    if full_path.startswith(("api/", "docs", "openapi.json", "health", "jobs", "ingestion", "stats", "sources")):
-        return JSONResponse(status_code=404, content={"detail": "Not found"})
-
     if INDEX_FILE.is_file():
         return FileResponse(INDEX_FILE)
 
