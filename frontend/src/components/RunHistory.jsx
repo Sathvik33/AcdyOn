@@ -14,6 +14,9 @@ function formatTime(iso) {
 }
 
 function duration(run) {
+  if (run.duration_seconds != null) {
+    return `${run.duration_seconds}s`
+  }
   if (!run.started_at || !run.completed_at) return '—'
   const ms = new Date(run.completed_at) - new Date(run.started_at)
   if (!Number.isFinite(ms) || ms < 0) return '—'
@@ -26,7 +29,7 @@ export default function RunHistory({ runs, loading }) {
       <div className="panel-head">
         <div>
           <div className="panel-title">Ingestion history</div>
-          <div className="panel-sub">Every run is recorded, including failures</div>
+          <div className="panel-sub">Every run is recorded with HTTP status and fault telemetry</div>
         </div>
       </div>
 
@@ -49,9 +52,11 @@ export default function RunHistory({ runs, loading }) {
                 <th>Time</th>
                 <th>Source</th>
                 <th>Status</th>
+                <th>HTTP</th>
                 <th>Found</th>
                 <th>Inserted</th>
-                <th>Skipped</th>
+                <th>Duplicates</th>
+                <th>Failures</th>
                 <th>Duration</th>
               </tr>
             </thead>
@@ -68,9 +73,11 @@ export default function RunHistory({ runs, loading }) {
                       </div>
                     ) : null}
                   </td>
+                  <td className="num">{run.http_status ?? '—'}</td>
                   <td className="num">{run.jobs_found}</td>
                   <td className="num">{run.jobs_inserted}</td>
-                  <td className="num">{run.jobs_skipped}</td>
+                  <td className="num">{run.duplicate_count ?? run.jobs_skipped}</td>
+                  <td className="num">{run.parse_failures ?? 0}</td>
                   <td className="num">{duration(run)}</td>
                 </tr>
               ))}

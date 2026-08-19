@@ -1,18 +1,24 @@
-﻿from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 from typing import Optional
 
+from app.core.config import settings
 from app.db.database import get_db
-from app.db.models import Job, IngestionRun
+from app.db.models import Job, IngestionRun, SourceHealth
 from app.schemas.job import (
     JobListResponse,
     JobResponse,
     IngestionRunResponse,
     IngestionResult,
+    SourceHealthResponse,
     StatsResponse,
 )
-from app.services.ingestion import run_ingestion
+from app.services.ingestion import (
+    run_ingestion,
+    get_or_create_source_health,
+    SOURCE_REGISTRY,
+)
 
 router = APIRouter()
 
@@ -82,10 +88,20 @@ def list_ingestion_runs(
 def trigger_ingestion(
     source: str = Query("jobicy", description="Source to ingest from"),
     count: Optional[int] = Query(None, ge=1, le=200, description="Number of jobs to fetch"),
+    allow_fallback: bool = Query(True, description="Enable automatic fallback if primary is blocked"),
     db: Session = Depends(get_db),
 ):
-    result = run_ingestion(db, source_name=source, count=count)
+    result = run_ingestion(db, source_name=source, count=count, allow_fallback=allow_fallback)
     return result
+
+
+@router.get("/sources/health", response_model=list[SourceHealthResponse])
+def list_source_health(db: Session = Depends(get_db)):
+    # Ensure registered sources have DB health records initialized
+    for src in SOURCE_REGISTRY.keys():
+        get_or_create_source_health(db, src)
+    records = db.query(SourceHealth).order_by(SourceHealth.source.asc()).all()
+    return [SourceHealthResponse.model_validate(r) for r in records]
 
 
 @router.get("/stats", response_model=StatsResponse)
@@ -96,6 +112,10 @@ def get_stats(db: Session = Depends(get_db)):
         .order_by(IngestionRun.started_at.desc())
         .first()
     )
+
+    primary_h = get_or_create_source_health(db, settings.primary_source)
+    fallback_h = get_or_create_source_health(db, settings.fallback_source)
+
     if latest_run:
         return StatsResponse(
             total_jobs=total_jobs,
@@ -103,5 +123,11 @@ def get_stats(db: Session = Depends(get_db)):
             latest_run_inserted=latest_run.jobs_inserted,
             latest_run_skipped=latest_run.jobs_skipped,
             latest_run_at=latest_run.started_at,
+            primary_source_health=primary_h.health_state,
+            fallback_source_health=fallback_h.health_state,
         )
-    return StatsResponse(total_jobs=total_jobs)
+    return StatsResponse(
+        total_jobs=total_jobs,
+        primary_source_health=primary_h.health_state,
+        fallback_source_health=fallback_h.health_state,
+    )

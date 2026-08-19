@@ -15,6 +15,7 @@ import {
   IconPlay,
   IconRefresh,
   IconAlert,
+  IconShield,
 } from './components/Icons.jsx'
 
 const PAGE_SIZE = 8
@@ -30,15 +31,25 @@ function relativeTime(iso) {
   return then.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
 }
 
+function SourceHealthPill({ state }) {
+  const normalized = String(state || 'HEALTHY').toUpperCase()
+  let toneClass = 'pill-ok'
+  if (normalized === 'DEGRADED') toneClass = 'pill-warn'
+  if (normalized === 'BLOCKED' || normalized === 'UNAVAILABLE') toneClass = 'pill-bad'
+  return <span className={`pill ${toneClass}`}>{normalized}</span>
+}
+
 export default function App() {
   const [stats, setStats] = useState(null)
   const [runs, setRuns] = useState([])
   const [jobs, setJobs] = useState(null)
   const [health, setHealth] = useState(null)
+  const [sourceHealthList, setSourceHealthList] = useState([])
 
   const [loading, setLoading] = useState(true)
   const [jobsLoading, setJobsLoading] = useState(true)
   const [running, setRunning] = useState(false)
+  const [selectedSource, setSelectedSource] = useState('jobicy')
   const [error, setError] = useState(null)
 
   const [search, setSearch] = useState('')
@@ -68,14 +79,16 @@ export default function App() {
 
   const loadOverview = useCallback(async () => {
     try {
-      const [statsData, runsData, healthData] = await Promise.all([
+      const [statsData, runsData, healthData, sourcesData] = await Promise.all([
         api.stats(),
         api.runs(20),
         api.health(),
+        api.sourceHealth(),
       ])
       setStats(statsData)
       setRuns(runsData)
       setHealth(healthData)
+      setSourceHealthList(sourcesData)
       setError(null)
     } catch (e) {
       setError(e.message)
@@ -108,11 +121,12 @@ export default function App() {
   async function handleRunIngestion() {
     setRunning(true)
     try {
-      const result = await api.runIngestion()
+      const result = await api.runIngestion(selectedSource, true)
+      const fallbackNote = result.fallback_used ? ' (Circuit breaker fallback activated)' : ''
       pushToast({
         status: result.status,
-        title: `Run ${result.status.replace('_', ' ').toLowerCase()}`,
-        body: `${result.jobs_found} found · ${result.jobs_inserted} inserted · ${result.jobs_skipped} skipped`,
+        title: `Run ${result.status.replace('_', ' ').toLowerCase()}${fallbackNote}`,
+        body: `${result.jobs_found} found · ${result.jobs_inserted} inserted · ${result.duplicate_count ?? result.jobs_skipped} dupes · ${result.duration_seconds}s`,
       })
       setPage(1)
       await Promise.all([loadOverview(), loadJobs()])
@@ -140,7 +154,7 @@ export default function App() {
           </span>
           <div className="brand-text">
             <h1>Job Ingestion Monitor</h1>
-            <p>Resilient ingestion from public job sources</p>
+            <p>Resilient ingestion with Circuit Breakers & Auto-Fallback</p>
           </div>
         </div>
 
@@ -149,6 +163,24 @@ export default function App() {
             <span className={`health-dot ${health ? (dbHealthy ? 'ok' : 'bad') : ''}`} />
             {health ? (dbHealthy ? 'Database connected' : 'Database unreachable') : 'Checking…'}
           </span>
+          <select
+            className="source-select"
+            value={selectedSource}
+            onChange={(e) => setSelectedSource(e.target.value)}
+            disabled={running}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '6px',
+              border: '1px solid var(--border)',
+              background: 'var(--surface-2)',
+              color: 'var(--text-1)',
+              fontWeight: 500,
+            }}
+          >
+            <option value="jobicy">Jobicy (Primary)</option>
+            <option value="remotive">Remotive (Secondary)</option>
+            <option value="mock_fallback">Mock Fallback</option>
+          </select>
           <button className="btn btn-ghost" onClick={handleRefresh} disabled={loading || running}>
             <IconRefresh />
             Refresh
@@ -202,6 +234,51 @@ export default function App() {
         />
       </div>
 
+      {/* Source Health Panel */}
+      <section className="panel">
+        <div className="panel-head">
+          <div>
+            <div className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <IconShield /> Source Health & Circuit Breakers
+            </div>
+            <div className="panel-sub">Automatic circuit breakers prevent hammering failing public APIs</div>
+          </div>
+        </div>
+        <div className="panel-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+          {sourceHealthList.length === 0 ? (
+            <div style={{ color: 'var(--text-3)' }}>Loading source health...</div>
+          ) : (
+            sourceHealthList.map((sh) => (
+              <div
+                key={sh.source}
+                style={{
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface-1)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <strong style={{ textTransform: 'capitalize' }}>{sh.source}</strong>
+                  <SourceHealthPill state={sh.health_state} />
+                </div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-2)' }}>
+                  Failures: {sh.consecutive_failures} · Latency: {sh.last_response_latency ? `${sh.last_response_latency.toFixed(2)}s` : '—'}
+                </div>
+                {sh.last_http_status ? (
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>
+                    Last HTTP Status: {sh.last_http_status}
+                  </div>
+                ) : null}
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+
       <PipelineFlow run={latestRun} isRunning={running} />
 
       <JobsPanel
@@ -217,7 +294,7 @@ export default function App() {
       <RunHistory runs={runs} loading={loading} />
 
       <footer className="foot">
-        <span>Source: Jobicy public jobs API</span>
+        <span>Sources: Jobicy (Primary), Remotive (Secondary), Mock Fallback</span>
         <span>·</span>
         <a href="/docs" target="_blank" rel="noopener noreferrer">
           API documentation

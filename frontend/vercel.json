@@ -1,0 +1,28 @@
+{
+  "rewrites": [
+    {
+      "source": "/health",
+      "destination": "https://YOUR-RENDER-BACKEND.onrender.com/health"
+    },
+    {
+      "source": "/stats",
+      "destination": "https://YOUR-RENDER-BACKEND.onrender.com/stats"
+    },
+    {
+      "source": "/jobs/:path*",
+      "destination": "https://YOUR-RENDER-BACKEND.onrender.com/jobs/:path*"
+    },
+    {
+      "source": "/ingestion/:path*",
+      "destination": "https://YOUR-RENDER-BACKEND.onrender.com/ingestion/:path*"
+    },
+    {
+      "source": "/sources/:path*",
+      "destination": "https://YOUR-RENDER-BACKEND.onrender.com/sources/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

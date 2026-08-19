@@ -1,5 +1,5 @@
-﻿from abc import ABC, abstractmethod
-from typing import Any, Iterable
+from abc import ABC, abstractmethod
+from typing import Any, Iterable, Optional
 
 from app.schemas.job import JobCreate
 from app.services.fetcher import FetchResult
@@ -7,6 +7,9 @@ from app.services.fetcher import FetchResult
 
 class BaseJobSource(ABC):
     name: str = "base"
+
+    def __init__(self, count: Optional[int] = None):
+        self.count = count
 
     @abstractmethod
     def fetch(self) -> FetchResult:

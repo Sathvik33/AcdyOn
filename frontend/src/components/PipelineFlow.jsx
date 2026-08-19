@@ -17,8 +17,6 @@ const STAGES = [
   { key: 'store', name: 'Store', icon: <IconSave /> },
 ]
 
-// Stage states are derived from the outcome of the most recent run, not from
-// per-stage telemetry: the API reports one status plus counters per run.
 function deriveStates(run, isRunning) {
   if (isRunning) return Object.fromEntries(STAGES.map((s) => [s.key, 'active']))
   if (!run) return Object.fromEntries(STAGES.map((s) => [s.key, 'idle']))
@@ -32,15 +30,20 @@ function deriveStates(run, isRunning) {
       ? { ...all('idle'), fetch: 'done', parse: 'failed' }
       : { ...all('idle'), fetch: 'failed' }
   }
-  if (status === 'PARTIAL') return { ...all('done'), validate: 'warn' }
+  if (status === 'PARTIAL') return { ...all('done'), parse: run.parse_failures > 0 ? 'warn' : 'done' }
   if (status === 'SUCCESS') return all('done')
   return all('idle')
 }
 
 function stageNote(key, run) {
   if (!run) return null
-  if (key === 'fetch') return `${run.jobs_found} found`
-  if (key === 'dedupe') return `${run.jobs_skipped} skipped`
+  if (key === 'fetch') {
+    const httpStr = run.http_status ? ` (HTTP ${run.http_status})` : ''
+    const retries = run.retry_count > 0 ? ` · ${run.retry_count} retries` : ''
+    return `${run.jobs_found} found${httpStr}${retries}`
+  }
+  if (key === 'parse' && run.parse_failures > 0) return `${run.parse_failures} failed`
+  if (key === 'dedupe') return `${run.duplicate_count ?? run.jobs_skipped} dupes`
   if (key === 'store') return `${run.jobs_inserted} stored`
   return null
 }
@@ -57,7 +60,7 @@ export default function PipelineFlow({ run, isRunning }) {
             {isRunning
               ? 'Run in progress'
               : run
-                ? `Last run ${new Date(run.started_at).toLocaleString()}`
+                ? `Last run ${new Date(run.started_at).toLocaleString()} · ${run.duration_seconds ? `${run.duration_seconds}s` : '0s'}`
                 : 'No runs recorded yet'}
           </div>
         </div>

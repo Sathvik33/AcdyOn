@@ -1,4 +1,4 @@
-﻿from sqlalchemy import Column, Integer, String, DateTime, Text, Index, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, Text, Float, Index, UniqueConstraint
 from sqlalchemy.sql import func
 from app.db.database import Base
 
@@ -36,4 +36,24 @@ class IngestionRun(Base):
     jobs_found = Column(Integer, nullable=False, default=0)
     jobs_inserted = Column(Integer, nullable=False, default=0)
     jobs_skipped = Column(Integer, nullable=False, default=0)
+    duration_seconds = Column(Float, nullable=True)
+    parse_failures = Column(Integer, nullable=False, default=0)
+    duplicate_count = Column(Integer, nullable=False, default=0)
+    http_status = Column(Integer, nullable=True)
+    retry_count = Column(Integer, nullable=False, default=0)
     error_message = Column(Text, nullable=True)
+
+
+class SourceHealth(Base):
+    __tablename__ = "source_health"
+
+    id = Column(Integer, primary_key=True, index=True)
+    source = Column(String(64), nullable=False, unique=True, index=True)
+    health_state = Column(String(32), nullable=False, default="HEALTHY", index=True)
+    consecutive_failures = Column(Integer, nullable=False, default=0)
+    last_successful_run = Column(DateTime(timezone=True), nullable=True)
+    last_failure = Column(DateTime(timezone=True), nullable=True)
+    last_http_status = Column(Integer, nullable=True)
+    last_response_latency = Column(Float, nullable=True)
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+

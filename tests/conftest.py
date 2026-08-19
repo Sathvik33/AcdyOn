@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
@@ -34,9 +34,13 @@ def setup_db():
 
 
 def _truncate(session):
-    session.execute(text("DELETE FROM jobs;"))
-    session.execute(text("DELETE FROM ingestion_runs;"))
-    session.commit()
+    try:
+        session.execute(text("DELETE FROM jobs;"))
+        session.execute(text("DELETE FROM ingestion_runs;"))
+        session.execute(text("DELETE FROM source_health;"))
+        session.commit()
+    except Exception:
+        session.rollback()
 
 
 @pytest.fixture

@@ -18,6 +18,7 @@ async function request(path, options) {
 export const api = {
   health: () => request('/health'),
   stats: () => request('/stats'),
+  sourceHealth: () => request('/sources/health'),
   runs: (limit = 20) => request(`/ingestion/runs?limit=${limit}`),
   jobs: ({ page = 1, pageSize = 8, search = '', source = '' } = {}) => {
     const params = new URLSearchParams({ page, page_size: pageSize })
@@ -25,6 +26,6 @@ export const api = {
     if (source) params.set('source', source)
     return request(`/jobs?${params.toString()}`)
   },
-  runIngestion: (source = 'jobicy') =>
-    request(`/ingestion/run?source=${encodeURIComponent(source)}`, { method: 'POST' }),
+  runIngestion: (source = 'jobicy', allowFallback = true) =>
+    request(`/ingestion/run?source=${encodeURIComponent(source)}&allow_fallback=${allowFallback}`, { method: 'POST' }),
 }

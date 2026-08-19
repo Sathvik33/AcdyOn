@@ -1,6 +1,6 @@
-﻿import json
+import json
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
 
 from app.schemas.job import JobCreate
 from app.services.fetcher import FetchResult
@@ -10,11 +10,16 @@ from app.sources.base import BaseJobSource
 class MockFallbackSource(BaseJobSource):
     name = "mock_fallback"
 
+    def __init__(self, count: Optional[int] = None):
+        super().__init__(count=count)
+        self.count = count or 2
+
     def fetch(self) -> FetchResult:
+        records = [self._record(i + 1) for i in range(self.count)]
         return FetchResult(
             ok=True,
             status_code=200,
-            body=json.dumps({"jobs": [self._record(1), self._record(2)]}),
+            body=json.dumps({"jobs": records}),
         )
 
     def parse(self, body: str) -> list[dict[str, Any]]:

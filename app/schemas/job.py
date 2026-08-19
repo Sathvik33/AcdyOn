@@ -1,4 +1,4 @@
-﻿from datetime import datetime
+from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -46,6 +46,11 @@ class IngestionRunResponse(BaseModel):
     jobs_found: int
     jobs_inserted: int
     jobs_skipped: int
+    duration_seconds: Optional[float] = None
+    parse_failures: int = 0
+    duplicate_count: int = 0
+    http_status: Optional[int] = None
+    retry_count: int = 0
     error_message: Optional[str] = None
 
 
@@ -56,7 +61,26 @@ class IngestionResult(BaseModel):
     jobs_inserted: int
     jobs_skipped: int
     run_id: int
+    duration_seconds: Optional[float] = None
+    parse_failures: int = 0
+    duplicate_count: int = 0
+    http_status: Optional[int] = None
+    retry_count: int = 0
+    fallback_used: bool = False
     error_message: Optional[str] = None
+
+
+class SourceHealthResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    source: str
+    health_state: str
+    consecutive_failures: int
+    last_successful_run: Optional[datetime] = None
+    last_failure: Optional[datetime] = None
+    last_http_status: Optional[int] = None
+    last_response_latency: Optional[float] = None
+    updated_at: datetime
 
 
 class StatsResponse(BaseModel):
@@ -65,3 +89,6 @@ class StatsResponse(BaseModel):
     latest_run_inserted: int = 0
     latest_run_skipped: int = 0
     latest_run_at: Optional[datetime] = None
+    primary_source_health: Optional[str] = None
+    fallback_source_health: Optional[str] = None
+
