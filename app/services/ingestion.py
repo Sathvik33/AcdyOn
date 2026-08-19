@@ -110,14 +110,11 @@ def update_source_health(
     return health
 
 
-def get_historical_avg_jobs(db: Session, source_name: str, limit: int = 3) -> float:
-    recent_runs = (
-        db.query(IngestionRun)
-        .filter(IngestionRun.source == source_name, IngestionRun.status == "SUCCESS")
-        .order_by(IngestionRun.started_at.desc())
-        .limit(limit)
-        .all()
-    )
+def get_historical_avg_jobs(db: Session, source_name: str, user_id: str = "default", limit: int = 3) -> float:
+    query = db.query(IngestionRun).filter(IngestionRun.source == source_name, IngestionRun.status == "SUCCESS")
+    if user_id and user_id != "all":
+        query = query.filter(IngestionRun.user_id == user_id)
+    recent_runs = query.order_by(IngestionRun.started_at.desc()).limit(limit).all()
     if not recent_runs:
         return 0.0
     return sum(r.jobs_found for r in recent_runs) / len(recent_runs)
@@ -335,7 +332,7 @@ def run_ingestion(
         existing_ids.add(job.external_id)
 
     if new_jobs:
-        db.bulk_save_objects(new_jobs)
+        db.add_all(new_jobs)
         db.commit()
         for db_job in new_jobs:
             logger.info(
