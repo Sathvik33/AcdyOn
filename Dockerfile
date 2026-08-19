@@ -13,7 +13,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ ./app/
 COPY run.py ./
-COPY DECISIONS.md ./
 COPY --from=frontend /ui/dist ./frontend/dist
 
 EXPOSE 8000
