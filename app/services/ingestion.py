@@ -332,8 +332,21 @@ def run_ingestion(
         existing_ids.add(job.external_id)
 
     if new_jobs:
-        db.add_all(new_jobs)
-        db.commit()
+        try:
+            db.add_all(new_jobs)
+            db.commit()
+        except Exception as insert_err:
+            db.rollback()
+            logger.warning("BATCH_INSERT_FAILED_FALLING_BACK", extra={"run_id": run.id, "error": str(insert_err)})
+            inserted_jobs = []
+            for db_job in new_jobs:
+                try:
+                    db.add(db_job)
+                    db.commit()
+                    inserted_jobs.append(db_job)
+                except Exception:
+                    db.rollback()
+            new_jobs = inserted_jobs
         for db_job in new_jobs:
             logger.info(
                 "JOB_INSERTED",
