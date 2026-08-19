@@ -7,6 +7,7 @@ class Job(Base):
     __tablename__ = "jobs"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(128), nullable=True, index=True, default="default")
     source = Column(String(64), nullable=False, index=True)
     external_id = Column(String(128), nullable=False, index=True)
     title = Column(String(512), nullable=True, index=True)
@@ -21,7 +22,7 @@ class Job(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     __table_args__ = (
-        UniqueConstraint("source", "external_id", name="uq_jobs_source_external_id"),
+        UniqueConstraint("source", "external_id", "user_id", name="uq_jobs_source_external_id_user"),
     )
 
 
@@ -29,6 +30,7 @@ class IngestionRun(Base):
     __tablename__ = "ingestion_runs"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(128), nullable=True, index=True, default="default")
     source = Column(String(64), nullable=False, index=True)
     started_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     completed_at = Column(DateTime(timezone=True), nullable=True)
@@ -56,4 +58,3 @@ class SourceHealth(Base):
     last_http_status = Column(Integer, nullable=True)
     last_response_latency = Column(Float, nullable=True)
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
-

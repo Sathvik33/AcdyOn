@@ -26,8 +26,8 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _get_existing_external_ids(db: Session, source: str) -> set[str]:
-    rows = db.query(Job.external_id).filter(Job.source == source).all()
+def _get_existing_external_ids(db: Session, source: str, user_id: str = "default") -> set[str]:
+    rows = db.query(Job.external_id).filter(Job.source == source, Job.user_id == user_id).all()
     return {row[0] for row in rows}
 
 
@@ -128,8 +128,10 @@ def run_ingestion(
     source_name: str = "jobicy",
     count: Optional[int] = None,
     allow_fallback: bool = True,
+    user_id: str = "default",
 ) -> IngestionResult:
     start_time = time.monotonic()
+    user_id = user_id or "default"
 
     # Circuit breaker check for requested source
     is_blocked, current_health = check_circuit_breaker(db, source_name)
@@ -153,6 +155,7 @@ def run_ingestion(
         return IngestionResult(
             status="FAILED",
             source=target_source_name,
+            user_id=user_id,
             jobs_found=0,
             jobs_inserted=0,
             jobs_skipped=0,
@@ -164,6 +167,7 @@ def run_ingestion(
 
     run = IngestionRun(
         source=target_source_name,
+        user_id=user_id,
         started_at=_now(),
         status="RUNNING",
         jobs_found=0,
@@ -301,7 +305,7 @@ def run_ingestion(
             )
             continue
 
-    existing_ids = _get_existing_external_ids(db, target_source_name)
+    existing_ids = _get_existing_external_ids(db, target_source_name, user_id=user_id)
     new_jobs: list[Job] = []
     skipped_duplicates = 0
 
@@ -316,6 +320,7 @@ def run_ingestion(
         db_job = Job(
             source=job.source,
             external_id=job.external_id,
+            user_id=user_id,
             title=job.title,
             company=job.company,
             location=job.location,

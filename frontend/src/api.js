@@ -1,7 +1,20 @@
 const BASE = import.meta.env.DEV ? '' : window.location.origin
 
-async function request(path, options) {
-  const res = await fetch(`${BASE}${path}`, options)
+function getUserId() {
+  let id = localStorage.getItem('acdyon_user_id')
+  if (!id) {
+    id = `user_${Math.random().toString(36).substring(2, 10)}`
+    localStorage.setItem('acdyon_user_id', id)
+  }
+  return id
+}
+
+async function request(path, options = {}) {
+  const headers = {
+    'X-User-ID': getUserId(),
+    ...(options.headers || {}),
+  }
+  const res = await fetch(`${BASE}${path}`, { ...options, headers })
   if (!res.ok) {
     let detail = `Request failed with status ${res.status}`
     try {
@@ -16,6 +29,7 @@ async function request(path, options) {
 }
 
 export const api = {
+  getUserId,
   health: () => request('/health'),
   stats: () => request('/stats'),
   sourceHealth: () => request('/sources/health'),

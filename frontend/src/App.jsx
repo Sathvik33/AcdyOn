@@ -163,6 +163,9 @@ export default function App() {
             <span className={`health-dot ${health ? (dbHealthy ? 'ok' : 'bad') : ''}`} />
             {health ? (dbHealthy ? 'Database connected' : 'Database unreachable') : 'Checking…'}
           </span>
+          <span style={{ fontSize: '0.8rem', opacity: 0.85, padding: '4px 8px', borderRadius: '4px', background: 'var(--surface-2)', color: 'var(--text-1)' }}>
+            User: {api.getUserId()}
+          </span>
           <select
             className="source-select"
             value={selectedSource}

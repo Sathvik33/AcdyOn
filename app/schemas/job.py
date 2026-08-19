@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, ConfigDict
 class JobBase(BaseModel):
     source: str = Field(..., max_length=64)
     external_id: str = Field(..., max_length=128)
+    user_id: Optional[str] = Field("default", max_length=128)
     title: Optional[str] = Field(None, max_length=512)
     company: Optional[str] = Field(None, max_length=255)
     location: Optional[str] = Field(None, max_length=255)
@@ -40,6 +41,7 @@ class IngestionRunResponse(BaseModel):
 
     id: int
     source: str
+    user_id: Optional[str] = "default"
     started_at: datetime
     completed_at: Optional[datetime] = None
     status: str
@@ -57,6 +59,7 @@ class IngestionRunResponse(BaseModel):
 class IngestionResult(BaseModel):
     status: str
     source: str
+    user_id: Optional[str] = "default"
     jobs_found: int
     jobs_inserted: int
     jobs_skipped: int

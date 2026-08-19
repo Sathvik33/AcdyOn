@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 from typing import Optional
@@ -23,6 +23,13 @@ from app.services.ingestion import (
 router = APIRouter()
 
 
+def resolve_user_id(
+    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    user_id: Optional[str] = Query(None, description="Optional user ID filter"),
+) -> str:
+    return x_user_id or user_id or "default"
+
+
 @router.get("/health", response_model=dict)
 def health_check(db: Session = Depends(get_db)):
     try:
@@ -38,9 +45,12 @@ def list_jobs(
     source: Optional[str] = Query(None, description="Filter by source"),
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    active_user_id: str = Depends(resolve_user_id),
     db: Session = Depends(get_db),
 ):
     query = db.query(Job)
+    if active_user_id and active_user_id != "all":
+        query = query.filter(Job.user_id == active_user_id)
     if source:
         query = query.filter(Job.source == source)
     if search:
@@ -63,8 +73,15 @@ def list_jobs(
 
 
 @router.get("/jobs/{job_id}", response_model=JobResponse)
-def get_job(job_id: int, db: Session = Depends(get_db)):
-    job = db.query(Job).filter(Job.id == job_id).first()
+def get_job(
+    job_id: int,
+    active_user_id: str = Depends(resolve_user_id),
+    db: Session = Depends(get_db),
+):
+    query = db.query(Job).filter(Job.id == job_id)
+    if active_user_id and active_user_id != "all":
+        query = query.filter(Job.user_id == active_user_id)
+    job = query.first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return JobResponse.model_validate(job)
@@ -73,11 +90,14 @@ def get_job(job_id: int, db: Session = Depends(get_db)):
 @router.get("/ingestion/runs", response_model=list[IngestionRunResponse])
 def list_ingestion_runs(
     limit: int = Query(20, ge=1, le=100),
+    active_user_id: str = Depends(resolve_user_id),
     db: Session = Depends(get_db),
 ):
+    query = db.query(IngestionRun)
+    if active_user_id and active_user_id != "all":
+        query = query.filter(IngestionRun.user_id == active_user_id)
     runs = (
-        db.query(IngestionRun)
-        .order_by(IngestionRun.started_at.desc())
+        query.order_by(IngestionRun.started_at.desc())
         .limit(limit)
         .all()
     )
@@ -89,9 +109,16 @@ def trigger_ingestion(
     source: str = Query("jobicy", description="Source to ingest from"),
     count: Optional[int] = Query(None, ge=1, le=200, description="Number of jobs to fetch"),
     allow_fallback: bool = Query(True, description="Enable automatic fallback if primary is blocked"),
+    active_user_id: str = Depends(resolve_user_id),
     db: Session = Depends(get_db),
 ):
-    result = run_ingestion(db, source_name=source, count=count, allow_fallback=allow_fallback)
+    result = run_ingestion(
+        db,
+        source_name=source,
+        count=count,
+        allow_fallback=allow_fallback,
+        user_id=active_user_id,
+    )
     return result
 
 
@@ -105,13 +132,18 @@ def list_source_health(db: Session = Depends(get_db)):
 
 
 @router.get("/stats", response_model=StatsResponse)
-def get_stats(db: Session = Depends(get_db)):
-    total_jobs = db.query(Job).count()
-    latest_run = (
-        db.query(IngestionRun)
-        .order_by(IngestionRun.started_at.desc())
-        .first()
-    )
+def get_stats(
+    active_user_id: str = Depends(resolve_user_id),
+    db: Session = Depends(get_db),
+):
+    jobs_query = db.query(Job)
+    runs_query = db.query(IngestionRun)
+    if active_user_id and active_user_id != "all":
+        jobs_query = jobs_query.filter(Job.user_id == active_user_id)
+        runs_query = runs_query.filter(IngestionRun.user_id == active_user_id)
+
+    total_jobs = jobs_query.count()
+    latest_run = runs_query.order_by(IngestionRun.started_at.desc()).first()
 
     primary_h = get_or_create_source_health(db, settings.primary_source)
     fallback_h = get_or_create_source_health(db, settings.fallback_source)

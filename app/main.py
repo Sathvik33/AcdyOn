@@ -31,6 +31,13 @@ def init_db():
     # Safely migrate existing tables if columns are missing
     try:
         with engine.connect() as conn:
+            try:
+                conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS user_id VARCHAR(128) DEFAULT 'default'"))
+                conn.execute(text("ALTER TABLE ingestion_runs ADD COLUMN IF NOT EXISTS user_id VARCHAR(128) DEFAULT 'default'"))
+                conn.commit()
+            except Exception as e:
+                logger.debug(f"user_id column migration check: {e}")
+
             columns = [
                 ("duration_seconds", "FLOAT"),
                 ("parse_failures", "INTEGER DEFAULT 0"),
